@@ -1,8 +1,18 @@
 package domain
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type BillStatus string
+
+type Currency string
+
+const (
+	CurrencyUSD Currency = "USD"
+	CurrencyGEL Currency = "GEL"
+)
 
 const (
 	BillStatusOpen   BillStatus = "OPEN"
@@ -12,6 +22,11 @@ const (
 type LineItem struct {
 	ID          string   `json:"id"`
 	Description string   `json:"description"`
+	AmountMinor int64    `json:"amount_minor"`
+	Currency    Currency `json:"currency"`
+}
+
+type Money struct {
 	AmountMinor int64    `json:"amount_minor"`
 	Currency    Currency `json:"currency"`
 }
@@ -44,6 +59,10 @@ func TotalsFromLineItems(items []LineItem) []Money {
 	}
 	
 	return out
+}
+
+func NormalizeCurrency(c Currency) Currency {
+	return Currency(strings.ToUpper(string(c)))
 }
 
 

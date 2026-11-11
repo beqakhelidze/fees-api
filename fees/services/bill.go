@@ -101,9 +101,6 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if strings.TrimSpace(item.Description) == "" {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("description is required").Err()
 	}
-	if err := domain.ValidateMoney(domain.Money{AmountMinor: item.AmountMinor, Currency: item.Currency}); err != nil {
-		return nil, err
-	}
 	if err := s.rejectIfClosed(ctx, billID); err != nil {
 		return nil, err
 	}
@@ -116,6 +113,7 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 		Args:         []interface{}{item},
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
+	
 	if err != nil {
 		return nil, temporalError(err)
 	}
