@@ -118,7 +118,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		delay = 0
 	}
 
-	// Wait until the bill is closed manually or the billing period ends.
 	if _, err := workflow.AwaitWithTimeout(ctx, delay, func() bool {
 		return state.Status == domain.BillStatusClosed
 	}); err != nil {
@@ -134,7 +133,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		}
 	}
 
-	// Let in-flight handlers finish their DB writes before completing.
 	if err := workflow.Await(ctx, func() bool { return workflow.AllHandlersFinished(ctx) }); err != nil {
 		return state, err
 	}

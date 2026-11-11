@@ -23,18 +23,18 @@ type AddLineItemRequest struct {
 	Currency    domain.Currency `json:"currency"`
 }
 
-//encore:api public method=POST path=/fees/bills
+//encore:api public method=POST path=/fees/bill
 func (a *App) CreateBill(ctx context.Context, req *CreateBillRequest) (*BillResponse, error) {
-	bill, err := a.bills.Create(ctx, req.PeriodStart, req.PeriodEnd)
+	bill, err := a.billService.Create(ctx, req.PeriodStart, req.PeriodEnd)
 	if err != nil {
 		return nil, err
 	}
 	return &BillResponse{Bill: *bill}, nil
 }
 
-//encore:api public method=POST path=/fees/bills/:id/line-items
+//encore:api public method=POST path=/fees/bill/:id/line-item
 func (a *App) AddLineItem(ctx context.Context, id string, req *AddLineItemRequest) (*BillResponse, error) {
-	bill, err := a.bills.AddLineItem(ctx, id, domain.LineItem{
+	bill, err := a.billService.AddLineItem(ctx, id, domain.LineItem{
 		ID:          req.ID,
 		Description: req.Description,
 		AmountMinor: req.AmountMinor,
@@ -46,18 +46,18 @@ func (a *App) AddLineItem(ctx context.Context, id string, req *AddLineItemReques
 	return &BillResponse{Bill: *bill}, nil
 }
 
-//encore:api public method=POST path=/fees/bills/:id/close
+//encore:api public method=POST path=/fees/bill/:id/close
 func (a *App) CloseBill(ctx context.Context, id string) (*BillResponse, error) {
-	bill, err := a.bills.Close(ctx, id)
+	bill, err := a.billService.Close(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return &BillResponse{Bill: *bill}, nil
 }
 
-//encore:api public method=GET path=/fees/bills/:id
+//encore:api public method=GET path=/fees/bill/:id
 func (a *App) GetBill(ctx context.Context, id string) (*BillResponse, error) {
-	bill, err := a.bills.Get(ctx, id)
+	bill, err := a.billService.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}

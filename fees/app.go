@@ -24,7 +24,7 @@ var (
 type App struct {
 	client client.Client
 	worker worker.Worker
-	bills  *services.BillService
+	billService  *services.BillService
 }
 
 func initApp() (*App, error) {
@@ -51,7 +51,7 @@ func initApp() (*App, error) {
 	return &App{
 		client: c,
 		worker: w,
-		bills:  billService,
+		billService:  billService,
 	}, nil
 }
 

@@ -78,6 +78,9 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if err := domain.ValidateMoney(domain.Money{AmountMinor: item.AmountMinor, Currency: item.Currency}); err != nil {
 		return nil, err
 	}
+	if err := s.rejectIfClosed(ctx, billID); err != nil {
+		return nil, err
+	}
 
 	item.Currency = domain.NormalizeCurrency(item.Currency)
 
@@ -88,12 +91,12 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
 	if err != nil {
-		return nil, s.updateError(ctx, billID, err)
+		return nil, temporalError(err)
 	}
 
 	var bill domain.Bill
 	if err := update.Get(ctx, &bill); err != nil {
-		return nil, s.updateError(ctx, billID, err)
+		return nil, temporalError(err)
 	}
 	return domain.BillWithTotals(&bill), nil
 }
@@ -101,6 +104,9 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, error) {
 	if strings.TrimSpace(billID) == "" {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("bill id is required").Err()
+	}
+	if err := s.rejectIfClosed(ctx, billID); err != nil {
+		return nil, err
 	}
 
 	update, err := s.temporal.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
@@ -110,12 +116,15 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
 	if err != nil {
-		return nil, s.updateError(ctx, billID, err)
+		if bill, dbErr := s.billRepo.GetByID(ctx, billID); dbErr == nil && bill.Status == domain.BillStatusClosed {
+			return domain.BillWithTotals(bill), nil
+		}
+		return nil, temporalError(err)
 	}
 
 	var bill domain.Bill
 	if err := update.Get(ctx, &bill); err != nil {
-		return nil, s.updateError(ctx, billID, err)
+		return nil, temporalError(err)
 	}
 	return domain.BillWithTotals(&bill), nil
 }

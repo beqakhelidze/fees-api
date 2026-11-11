@@ -34,7 +34,7 @@ If the DB schema is stale: `encore db reset pave_db`
 
 | Method | Path |
 |--------|------|
-| `POST` | `/fees/bills` |
-| `POST` | `/fees/bills/:id/line-items` |
-| `POST` | `/fees/bills/:id/close` |
-| `GET` | `/fees/bills/:id` |
+| `POST` | `/fees/bill` |
+| `POST` | `/fees/bill/:id/line-item` |
+| `POST` | `/fees/bill/:id/close` |
+| `GET` | `/fees/bill/:id` |
