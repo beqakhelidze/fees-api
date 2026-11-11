@@ -1,11 +1,11 @@
 # Fees API
 
-Go + Encore + Temporal fees API. Each bill is a Temporal workflow: add line items while `OPEN`, then close (manually or at `period_end`) for the invoice. Per-currency totals are always derived from line items (not stored in the DB). Currencies: `USD`, `GEL` (`amount_minor` integers, no FX).
+Go + Encore + Temporal fees API.
 
 ## Prerequisites
 
 - [Encore CLI](https://encore.dev/docs/install)
-- [Temporal CLI](https://docs.temporal.io/cli) (`brew install temporal`)
+- [Temporal CLI](https://docs.temporal.io/cli) (`brew install temporal` for )
 - Go 1.22+
 
 ## Run
