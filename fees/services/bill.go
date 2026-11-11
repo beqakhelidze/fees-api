@@ -38,7 +38,7 @@ func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, err
 	}
 
 	stored, err := s.billRepo.GetByID(ctx, billID)
-	
+
 	if err != nil {
 		if errors.Is(err, sqldb.ErrNoRows) {
 			return nil, errs.B().Code(errs.NotFound).Msg("bill not found").Err()
@@ -75,7 +75,7 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 	}
 
 	return domain.BillWithTotals(&domain.Bill{
-		ID:          billID,
+		ID:          input.ID,
 		Status:      domain.BillStatusOpen,
 		PeriodStart: input.PeriodStart,
 		PeriodEnd:   input.PeriodEnd,
@@ -93,9 +93,6 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if strings.TrimSpace(item.Description) == "" {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("description is required").Err()
 	}
-	if err := s.rejectIfClosed(ctx, billID); err != nil {
-		return nil, err
-	}
 
 	item.Currency = domain.NormalizeCurrency(item.Currency)
 
@@ -107,6 +104,9 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	})
 	
 	if err != nil {
+		if bill, dbErr := s.billRepo.GetByID(ctx, billID); dbErr == nil && bill.Status == domain.BillStatusClosed {
+			return nil, errs.B().Code(errs.FailedPrecondition).Msg("bill is closed").Err()
+		}
 		return nil, temporalError(err)
 	}
 
@@ -120,9 +120,6 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, error) {
 	if strings.TrimSpace(billID) == "" {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("bill id is required").Err()
-	}
-	if err := s.rejectIfClosed(ctx, billID); err != nil {
-		return nil, err
 	}
 
 	update, err := s.temporal.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
@@ -145,23 +142,6 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	}
 	
 	return domain.BillWithTotals(&bill), nil
-}
-
-func (s *BillService) rejectIfClosed(ctx context.Context, id string) error {
-	bill, err := s.billRepo.GetByID(ctx, id)
-
-	if err != nil {
-		if errors.Is(err, sqldb.ErrNoRows) {
-			return nil
-		}
-		return err
-	}
-
-	if bill.Status == domain.BillStatusClosed {
-		return errs.B().Code(errs.FailedPrecondition).Msg("bill is closed").Err()
-	}
-
-	return nil
 }
 
 func temporalError(err error) error {
