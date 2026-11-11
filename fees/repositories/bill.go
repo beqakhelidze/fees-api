@@ -10,7 +10,8 @@ import (
 
 type BillRepository interface {
 	Insert(ctx context.Context, bill domain.Bill) error
-	UpsertSnapshot(ctx context.Context, bill domain.Bill) error
+	InsertLineItem(ctx context.Context, billID string, item domain.LineItem) error
+	Close(ctx context.Context, billID string, closedAt time.Time) error
 	GetByID(ctx context.Context, id string) (*domain.Bill, error)
 }
 
@@ -30,34 +31,22 @@ func (r *postgresBillRepository) Insert(ctx context.Context, bill domain.Bill) e
 	return err
 }
 
-func (r *postgresBillRepository) UpsertSnapshot(ctx context.Context, bill domain.Bill) error {
+func (r *postgresBillRepository) InsertLineItem(ctx context.Context, billID string, item domain.LineItem) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO bills (id, status, period_start, period_end, closed_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		ON CONFLICT (id) DO UPDATE SET
-			status = EXCLUDED.status,
-			closed_at = EXCLUDED.closed_at,
-			updated_at = NOW()
-	`, bill.ID, string(bill.Status), bill.PeriodStart, bill.PeriodEnd, bill.ClosedAt)
-	if err != nil {
-		return err
-	}
+		INSERT INTO line_items (bill_id, id, description, amount_minor, currency, created_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
+		ON CONFLICT (bill_id, id) DO NOTHING
+	`, billID, item.ID, item.Description, item.AmountMinor, string(item.Currency))
+	return err
+}
 
-	_, err = r.db.Exec(ctx, `DELETE FROM line_items WHERE bill_id = $1`, bill.ID)
-	if err != nil {
-		return err
-	}
-
-	for _, item := range bill.LineItems {
-		_, err = r.db.Exec(ctx, `
-			INSERT INTO line_items (bill_id, id, description, amount_minor, currency, created_at)
-			VALUES ($1, $2, $3, $4, $5, NOW())
-		`, bill.ID, item.ID, item.Description, item.AmountMinor, string(item.Currency))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (r *postgresBillRepository) Close(ctx context.Context, billID string, closedAt time.Time) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE bills
+		SET status = $2, closed_at = $3, updated_at = NOW()
+		WHERE id = $1
+	`, billID, string(domain.BillStatusClosed), closedAt)
+	return err
 }
 
 func (r *postgresBillRepository) GetByID(ctx context.Context, id string) (*domain.Bill, error) {
@@ -98,12 +87,12 @@ func (r *postgresBillRepository) GetByID(ctx context.Context, id string) (*domai
 		return nil, err
 	}
 
-	return domain.BillWithTotals(&domain.Bill{
+	return &domain.Bill{
 		ID:          id,
 		Status:      domain.BillStatus(status),
 		PeriodStart: periodStart,
 		PeriodEnd:   periodEnd,
 		LineItems:   items,
 		ClosedAt:    closedAt,
-	}), nil
+	}, nil
 }

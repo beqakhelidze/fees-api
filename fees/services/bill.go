@@ -102,7 +102,7 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 		return nil, err
 	}
 
-	if err := s.billRepo.UpsertSnapshot(ctx, bill); err != nil {
+	if err := s.billRepo.InsertLineItem(ctx, billID, item); err != nil {
 		return nil, err
 	}
 	return domain.BillWithTotals(&bill), nil
@@ -134,9 +134,16 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 		return nil, err
 	}
 
-	if err := s.billRepo.UpsertSnapshot(ctx, bill); err != nil {
+	closedAt := time.Now().UTC()
+
+	if bill.ClosedAt != nil {
+		closedAt = *bill.ClosedAt
+	}
+
+	if err := s.billRepo.Close(ctx, billID, closedAt); err != nil {
 		return nil, err
 	}
+
 	return domain.BillWithTotals(&bill), nil
 }
 
@@ -151,14 +158,15 @@ func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, err
 		if err := encoded.Get(&bill); err != nil {
 			return nil, err
 		}
-		_ = s.billRepo.UpsertSnapshot(ctx, bill)
 		return domain.BillWithTotals(&bill), nil
 	}
 
 	stored, dbErr := s.billRepo.GetByID(ctx, billID)
+	
 	if dbErr == nil {
 		return domain.BillWithTotals(stored), nil
 	}
+
 	if errors.Is(dbErr, sqldb.ErrNoRows) {
 		return nil, err
 	}
