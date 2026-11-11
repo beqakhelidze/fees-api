@@ -22,7 +22,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 	}
 
 	if err := workflow.SetQueryHandler(ctx, QueryGetBill, func() (domain.Bill, error) {
-		return *domain.WithDerivedTotals(&state), nil
+		return *domain.BillWithTotals(&state), nil
 	}); err != nil {
 		return state, err
 	}
@@ -31,7 +31,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		func(ctx workflow.Context, item domain.LineItem) (domain.Bill, error) {
 			item.Currency = domain.NormalizeCurrency(item.Currency)
 			state.LineItems = append(state.LineItems, item)
-			return *domain.WithDerivedTotals(&state), nil
+			return *domain.BillWithTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
 			Validator: func(ctx workflow.Context, item domain.LineItem) error {
@@ -71,7 +71,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			state.Status = domain.BillStatusClosed
 			state.ClosedAt = &now
 			closedCh.Send(ctx, true)
-			return *domain.WithDerivedTotals(&state), nil
+			return *domain.BillWithTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
 			Validator: func(ctx workflow.Context, _ struct{}) error {
@@ -114,8 +114,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		state.ClosedAt = &now
 	}
 
-	// Persist final invoice (covers manual close and period-end auto-close).
-	// Totals are not stored; they are derived from line items when closed.
 	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
 	})
@@ -123,7 +121,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
-	return *domain.WithDerivedTotals(&state), nil
+	return *domain.BillWithTotals(&state), nil
 }
 
 // WorkflowID returns the Temporal workflow id for a bill.

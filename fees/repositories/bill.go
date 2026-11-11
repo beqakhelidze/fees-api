@@ -98,7 +98,7 @@ func (r *postgresBillRepository) GetByID(ctx context.Context, id string) (*domai
 		return nil, err
 	}
 
-	return domain.WithDerivedTotals(&domain.Bill{
+	return domain.BillWithTotals(&domain.Bill{
 		ID:          id,
 		Status:      domain.BillStatus(status),
 		PeriodStart: periodStart,

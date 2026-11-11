@@ -47,7 +47,7 @@ func TotalsFromLineItems(items []LineItem) []Money {
 }
 
 
-func WithDerivedTotals(bill *Bill) *Bill {
+func BillWithTotals(bill *Bill) *Bill {
 	if bill == nil {
 		return nil
 	}

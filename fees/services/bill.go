@@ -65,7 +65,7 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 		return nil, err
 	}
 
-	return domain.WithDerivedTotals(&bill), nil
+	return domain.BillWithTotals(&bill), nil
 }
 
 func (s *BillService) AddLineItem(ctx context.Context, billID string, item domain.LineItem) (*domain.Bill, error) {
@@ -105,7 +105,7 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if err := s.billRepo.UpsertSnapshot(ctx, bill); err != nil {
 		return nil, err
 	}
-	return domain.WithDerivedTotals(&bill), nil
+	return domain.BillWithTotals(&bill), nil
 }
 
 func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, error) {
@@ -124,7 +124,7 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	})
 	if err != nil {
 		if bill, dbErr := s.billRepo.GetByID(ctx, billID); dbErr == nil && bill.Status == domain.BillStatusClosed {
-			return domain.WithDerivedTotals(bill), nil
+			return domain.BillWithTotals(bill), nil
 		}
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	if err := s.billRepo.UpsertSnapshot(ctx, bill); err != nil {
 		return nil, err
 	}
-	return domain.WithDerivedTotals(&bill), nil
+	return domain.BillWithTotals(&bill), nil
 }
 
 func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, error) {
@@ -152,12 +152,12 @@ func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, err
 			return nil, err
 		}
 		_ = s.billRepo.UpsertSnapshot(ctx, bill)
-		return domain.WithDerivedTotals(&bill), nil
+		return domain.BillWithTotals(&bill), nil
 	}
 
 	stored, dbErr := s.billRepo.GetByID(ctx, billID)
 	if dbErr == nil {
-		return domain.WithDerivedTotals(stored), nil
+		return domain.BillWithTotals(stored), nil
 	}
 	if errors.Is(dbErr, sqldb.ErrNoRows) {
 		return nil, err
