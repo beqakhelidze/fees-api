@@ -9,10 +9,6 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// BillWorkflow owns the lifecycle of a single fee bill for a billing period.
-// Mutations go through Temporal Updates so concurrent adds are serialized and
-// closed bills reliably reject new line items. The workflow is the only writer
-// to Postgres: every change is persisted by a retried activity.
 func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 	state := domain.Bill{
 		ID:          input.ID,
@@ -26,8 +22,8 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		StartToCloseTimeout: 10 * time.Second,
 	})
 
-	// Line items reference the bill row, so handlers wait until it is saved.
 	billSaved := false
+
 	waitForBill := func(ctx workflow.Context) error {
 		return workflow.Await(ctx, func() bool { return billSaved })
 	}
@@ -42,12 +38,15 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		func(ctx workflow.Context, item domain.LineItem) (domain.Bill, error) {
 			item.Currency = domain.NormalizeCurrency(item.Currency)
 			state.LineItems = append(state.LineItems, item)
+
 			if err := waitForBill(ctx); err != nil {
 				return state, err
 			}
+
 			if err := workflow.ExecuteActivity(actCtx, "InsertLineItem", state.ID, item).Get(ctx, nil); err != nil {
 				return state, err
 			}
+
 			return *domain.BillWithTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
@@ -85,12 +84,15 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			now := workflow.Now(ctx).UTC()
 			state.Status = domain.BillStatusClosed
 			state.ClosedAt = &now
+
 			if err := waitForBill(ctx); err != nil {
 				return state, err
 			}
+
 			if err := workflow.ExecuteActivity(actCtx, "MarkBillClosed", state.ID, now).Get(ctx, nil); err != nil {
 				return state, err
 			}
+
 			return *domain.BillWithTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
@@ -108,6 +110,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 	if err := workflow.ExecuteActivity(actCtx, "InsertBill", state).Get(ctx, nil); err != nil {
 		return state, err
 	}
+
 	billSaved = true
 
 	delay := state.PeriodEnd.Sub(workflow.Now(ctx))
