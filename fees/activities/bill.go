@@ -10,12 +10,14 @@ import (
 
 // Activities are Temporal activities backed by the repository layer.
 // Each one is idempotent so Temporal can safely retry it.
-type Activities struct {
-	billRepo repositories.BillRepository
-}
+
 
 func New(billRepo repositories.BillRepository) *Activities {
 	return &Activities{billRepo: billRepo}
+}
+
+type Activities struct {
+	billRepo repositories.BillRepository
 }
 
 func (a *Activities) InsertBill(ctx context.Context, bill domain.Bill) error {

@@ -32,6 +32,32 @@ type BillService struct {
 	billRepo  repositories.BillRepository
 }
 
+func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, error) {
+	if strings.TrimSpace(billID) == "" {
+		return nil, errs.B().Code(errs.InvalidArgument).Msg("bill id is required").Err()
+	}
+
+	var bill domain.Bill
+	encoded, err := s.temporal.QueryWorkflow(ctx, workflows.WorkflowID(billID), "", workflows.QueryGetBill)
+	if err == nil {
+		if err := encoded.Get(&bill); err != nil {
+			return nil, err
+		}
+		return domain.BillWithTotals(&bill), nil
+	}
+
+	stored, dbErr := s.billRepo.GetByID(ctx, billID)
+	
+	if dbErr == nil {
+		return domain.BillWithTotals(stored), nil
+	}
+
+	if errors.Is(dbErr, sqldb.ErrNoRows) {
+		return nil, temporalError(err)
+	}
+	return nil, dbErr
+}
+
 func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Time) (*domain.Bill, error) {
 	if periodStart.IsZero() || periodEnd.IsZero() {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("period_start and period_end are required").Err()
@@ -127,32 +153,6 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 		return nil, temporalError(err)
 	}
 	return domain.BillWithTotals(&bill), nil
-}
-
-func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, error) {
-	if strings.TrimSpace(billID) == "" {
-		return nil, errs.B().Code(errs.InvalidArgument).Msg("bill id is required").Err()
-	}
-
-	var bill domain.Bill
-	encoded, err := s.temporal.QueryWorkflow(ctx, workflows.WorkflowID(billID), "", workflows.QueryGetBill)
-	if err == nil {
-		if err := encoded.Get(&bill); err != nil {
-			return nil, err
-		}
-		return domain.BillWithTotals(&bill), nil
-	}
-
-	stored, dbErr := s.billRepo.GetByID(ctx, billID)
-	
-	if dbErr == nil {
-		return domain.BillWithTotals(stored), nil
-	}
-
-	if errors.Is(dbErr, sqldb.ErrNoRows) {
-		return nil, temporalError(err)
-	}
-	return nil, dbErr
 }
 
 func (s *BillService) rejectIfClosed(ctx context.Context, id string) error {
