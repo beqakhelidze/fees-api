@@ -13,7 +13,9 @@ import (
 	"encore.dev/storage/sqldb"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/temporal"
 )
 
 func NewBillService(temporal client.Client, taskQueue string, billRepo repositories.BillRepository) *BillService {
@@ -76,9 +78,6 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if err := domain.ValidateMoney(domain.Money{AmountMinor: item.AmountMinor, Currency: item.Currency}); err != nil {
 		return nil, err
 	}
-	if err := s.rejectIfClosed(ctx, billID); err != nil {
-		return nil, err
-	}
 
 	item.Currency = domain.NormalizeCurrency(item.Currency)
 
@@ -89,12 +88,12 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
 	if err != nil {
-		return nil, err
+		return nil, s.updateError(ctx, billID, err)
 	}
 
 	var bill domain.Bill
 	if err := update.Get(ctx, &bill); err != nil {
-		return nil, err
+		return nil, s.updateError(ctx, billID, err)
 	}
 	return domain.BillWithTotals(&bill), nil
 }
@@ -102,9 +101,6 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, error) {
 	if strings.TrimSpace(billID) == "" {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("bill id is required").Err()
-	}
-	if err := s.rejectIfClosed(ctx, billID); err != nil {
-		return nil, err
 	}
 
 	update, err := s.temporal.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
@@ -114,15 +110,12 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
 	if err != nil {
-		if bill, dbErr := s.billRepo.GetByID(ctx, billID); dbErr == nil && bill.Status == domain.BillStatusClosed {
-			return domain.BillWithTotals(bill), nil
-		}
-		return nil, err
+		return nil, s.updateError(ctx, billID, err)
 	}
 
 	var bill domain.Bill
 	if err := update.Get(ctx, &bill); err != nil {
-		return nil, err
+		return nil, s.updateError(ctx, billID, err)
 	}
 	return domain.BillWithTotals(&bill), nil
 }
@@ -148,7 +141,7 @@ func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, err
 	}
 
 	if errors.Is(dbErr, sqldb.ErrNoRows) {
-		return nil, err
+		return nil, temporalError(err)
 	}
 	return nil, dbErr
 }
@@ -165,4 +158,16 @@ func (s *BillService) rejectIfClosed(ctx context.Context, id string) error {
 		return errs.B().Code(errs.FailedPrecondition).Msg("bill is closed").Err()
 	}
 	return nil
+}
+
+func temporalError(err error) error {
+	var notFound *serviceerror.NotFound
+	if errors.As(err, &notFound) {
+		return errs.B().Code(errs.NotFound).Msg("bill not found").Err()
+	}
+	var appErr *temporal.ApplicationError
+	if errors.As(err, &appErr) {
+		return errs.B().Code(errs.FailedPrecondition).Msg(appErr.Message()).Err()
+	}
+	return err
 }

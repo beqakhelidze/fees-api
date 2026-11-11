@@ -80,8 +80,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
-	closedCh := workflow.NewBufferedChannel(ctx, 1)
-
 	if err := workflow.SetUpdateHandlerWithOptions(ctx, UpdateCloseBill,
 		func(ctx workflow.Context, _ struct{}) (domain.Bill, error) {
 			now := workflow.Now(ctx).UTC()
@@ -93,7 +91,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			if err := workflow.ExecuteActivity(actCtx, "MarkBillClosed", state.ID, now).Get(ctx, nil); err != nil {
 				return state, err
 			}
-			closedCh.Send(ctx, true)
 			return *domain.BillWithTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
@@ -118,25 +115,14 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		delay = 0
 	}
 
-	selector := workflow.NewSelector(ctx)
-	manualClose := false
-	periodEnded := false
-
-	selector.AddReceive(closedCh, func(c workflow.ReceiveChannel, _ bool) {
-		var v bool
-		c.Receive(ctx, &v)
-		manualClose = true
-	})
-	selector.AddFuture(workflow.NewTimer(ctx, delay), func(f workflow.Future) {
-		_ = f.Get(ctx, nil)
-		periodEnded = true
-	})
-
-	for !manualClose && !periodEnded {
-		selector.Select(ctx)
+	// Wait until the bill is closed manually or the billing period ends.
+	if _, err := workflow.AwaitWithTimeout(ctx, delay, func() bool {
+		return state.Status == domain.BillStatusClosed
+	}); err != nil {
+		return state, err
 	}
 
-	if periodEnded && state.Status == domain.BillStatusOpen {
+	if state.Status == domain.BillStatusOpen {
 		now := workflow.Now(ctx).UTC()
 		state.Status = domain.BillStatusClosed
 		state.ClosedAt = &now
