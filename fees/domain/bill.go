@@ -22,6 +22,35 @@ type Bill struct {
 	PeriodStart time.Time  `json:"period_start"`
 	PeriodEnd   time.Time  `json:"period_end"`
 	LineItems   []LineItem `json:"line_items"`
-	Totals      []Money    `json:"totals"`
-	ClosedAt    *time.Time `json:"closed_at,omitempty"`
+	Totals   []Money    `json:"totals,omitempty"`
+	ClosedAt *time.Time `json:"closed_at,omitempty"`
+}
+
+func TotalsFromLineItems(items []LineItem) []Money {
+	sums := map[Currency]int64{}
+	order := []Currency{}
+
+	for _, item := range items {
+		c := NormalizeCurrency(item.Currency)
+		if _, ok := sums[c]; !ok {
+			order = append(order, c)
+		}
+		sums[c] += item.AmountMinor
+	}
+
+	out := make([]Money, 0, len(order))
+	for _, c := range order {
+		out = append(out, Money{AmountMinor: sums[c], Currency: c})
+	}
+	
+	return out
+}
+
+
+func WithDerivedTotals(bill *Bill) *Bill {
+	if bill == nil {
+		return nil
+	}
+	bill.Totals = TotalsFromLineItems(bill.LineItems)
+	return bill
 }

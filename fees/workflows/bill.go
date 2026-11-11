@@ -19,11 +19,10 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		PeriodStart: input.PeriodStart,
 		PeriodEnd:   input.PeriodEnd,
 		LineItems:   []domain.LineItem{},
-		Totals:      []domain.Money{},
 	}
 
 	if err := workflow.SetQueryHandler(ctx, QueryGetBill, func() (domain.Bill, error) {
-		return state, nil
+		return *domain.WithDerivedTotals(&state), nil
 	}); err != nil {
 		return state, err
 	}
@@ -32,8 +31,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		func(ctx workflow.Context, item domain.LineItem) (domain.Bill, error) {
 			item.Currency = domain.NormalizeCurrency(item.Currency)
 			state.LineItems = append(state.LineItems, item)
-			state.Totals = domain.TotalsFromLineItems(state.LineItems)
-			return state, nil
+			return *domain.WithDerivedTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
 			Validator: func(ctx workflow.Context, item domain.LineItem) error {
@@ -72,9 +70,8 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			now := workflow.Now(ctx).UTC()
 			state.Status = domain.BillStatusClosed
 			state.ClosedAt = &now
-			state.Totals = domain.TotalsFromLineItems(state.LineItems)
 			closedCh.Send(ctx, true)
-			return state, nil
+			return *domain.WithDerivedTotals(&state), nil
 		},
 		workflow.UpdateHandlerOptions{
 			Validator: func(ctx workflow.Context, _ struct{}) error {
@@ -115,10 +112,10 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		now := workflow.Now(ctx).UTC()
 		state.Status = domain.BillStatusClosed
 		state.ClosedAt = &now
-		state.Totals = domain.TotalsFromLineItems(state.LineItems)
 	}
 
 	// Persist final invoice (covers manual close and period-end auto-close).
+	// Totals are not stored; they are derived from line items when closed.
 	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
 	})
@@ -126,7 +123,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
-	return state, nil
+	return *domain.WithDerivedTotals(&state), nil
 }
 
 // WorkflowID returns the Temporal workflow id for a bill.

@@ -40,23 +40,3 @@ func ValidateMoney(m Money) error {
 	}
 	return nil
 }
-
-func TotalsFromLineItems(items []LineItem) []Money {
-	sums := map[Currency]int64{}
-	order := []Currency{}
-
-	for _, item := range items {
-		c := NormalizeCurrency(item.Currency)
-		if _, ok := sums[c]; !ok {
-			order = append(order, c)
-		}
-		sums[c] += item.AmountMinor
-	}
-
-	out := make([]Money, 0, len(order))
-	for _, c := range order {
-		out = append(out, Money{AmountMinor: sums[c], Currency: c})
-	}
-	
-	return out
-}

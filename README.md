@@ -1,6 +1,6 @@
 # Fees API
 
-Go + Encore + Temporal fees API. Each bill is a Temporal workflow: add line items while `OPEN`, then close (manually or at `period_end`) for the invoice (line items + per-currency totals). Currencies: `USD`, `GEL` (`amount_minor` integers, no FX).
+Go + Encore + Temporal fees API. Each bill is a Temporal workflow: add line items while `OPEN`, then close (manually or at `period_end`) for the invoice. Per-currency totals are always derived from line items (not stored in the DB). Currencies: `USD`, `GEL` (`amount_minor` integers, no FX).
 
 ## Prerequisites
 

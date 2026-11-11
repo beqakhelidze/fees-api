@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"encore.app/fees/domain"
@@ -24,32 +23,22 @@ type postgresBillRepository struct {
 }
 
 func (r *postgresBillRepository) Insert(ctx context.Context, bill domain.Bill) error {
-	totalsJSON, err := json.Marshal(bill.Totals)
-	if err != nil {
-		return err
-	}
-	_, err = r.db.Exec(ctx, `
-		INSERT INTO bills (id, status, period_start, period_end, totals_json, closed_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-	`, bill.ID, string(bill.Status), bill.PeriodStart, bill.PeriodEnd, totalsJSON, bill.ClosedAt)
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO bills (id, status, period_start, period_end, closed_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+	`, bill.ID, string(bill.Status), bill.PeriodStart, bill.PeriodEnd, bill.ClosedAt)
 	return err
 }
 
 func (r *postgresBillRepository) UpsertSnapshot(ctx context.Context, bill domain.Bill) error {
-	totalsJSON, err := json.Marshal(bill.Totals)
-	if err != nil {
-		return err
-	}
-
-	_, err = r.db.Exec(ctx, `
-		INSERT INTO bills (id, status, period_start, period_end, totals_json, closed_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO bills (id, status, period_start, period_end, closed_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		ON CONFLICT (id) DO UPDATE SET
 			status = EXCLUDED.status,
-			totals_json = EXCLUDED.totals_json,
 			closed_at = EXCLUDED.closed_at,
 			updated_at = NOW()
-	`, bill.ID, string(bill.Status), bill.PeriodStart, bill.PeriodEnd, totalsJSON, bill.ClosedAt)
+	`, bill.ID, string(bill.Status), bill.PeriodStart, bill.PeriodEnd, bill.ClosedAt)
 	if err != nil {
 		return err
 	}
@@ -76,25 +65,14 @@ func (r *postgresBillRepository) GetByID(ctx context.Context, id string) (*domai
 		status      string
 		periodStart time.Time
 		periodEnd   time.Time
-		totalsJSON  []byte
 		closedAt    *time.Time
 	)
 	err := r.db.QueryRow(ctx, `
-		SELECT status, period_start, period_end, totals_json, closed_at
+		SELECT status, period_start, period_end, closed_at
 		FROM bills WHERE id = $1
-	`, id).Scan(&status, &periodStart, &periodEnd, &totalsJSON, &closedAt)
+	`, id).Scan(&status, &periodStart, &periodEnd, &closedAt)
 	if err != nil {
 		return nil, err
-	}
-
-	var totals []domain.Money
-	if len(totalsJSON) > 0 {
-		if err := json.Unmarshal(totalsJSON, &totals); err != nil {
-			return nil, err
-		}
-	}
-	if totals == nil {
-		totals = []domain.Money{}
 	}
 
 	rows, err := r.db.Query(ctx, `
@@ -120,13 +98,12 @@ func (r *postgresBillRepository) GetByID(ctx context.Context, id string) (*domai
 		return nil, err
 	}
 
-	return &domain.Bill{
+	return domain.WithDerivedTotals(&domain.Bill{
 		ID:          id,
 		Status:      domain.BillStatus(status),
 		PeriodStart: periodStart,
 		PeriodEnd:   periodEnd,
 		LineItems:   items,
-		Totals:      totals,
 		ClosedAt:    closedAt,
-	}, nil
+	}), nil
 }
