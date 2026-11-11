@@ -31,6 +31,7 @@ func initApp() (*App, error) {
 	c, err := client.Dial(client.Options{
 		HostPort: cfg.TemporalServer,
 	})
+	
 	if err != nil {
 		return nil, fmt.Errorf("create temporal client: %w", err)
 	}

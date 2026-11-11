@@ -8,9 +8,6 @@ import (
 	"encore.app/fees/repositories"
 )
 
-// Activities are Temporal activities backed by the repository layer.
-// Each one is idempotent so Temporal can safely retry it.
-
 
 func New(billRepo repositories.BillRepository) *Activities {
 	return &Activities{billRepo: billRepo}

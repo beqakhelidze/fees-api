@@ -37,25 +37,16 @@ func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, err
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("bill id is required").Err()
 	}
 
-	var bill domain.Bill
-	encoded, err := s.temporal.QueryWorkflow(ctx, workflows.WorkflowID(billID), "", workflows.QueryGetBill)
-	if err == nil {
-		if err := encoded.Get(&bill); err != nil {
-			return nil, err
-		}
-		return domain.BillWithTotals(&bill), nil
-	}
-
-	stored, dbErr := s.billRepo.GetByID(ctx, billID)
+	stored, err := s.billRepo.GetByID(ctx, billID)
 	
-	if dbErr == nil {
-		return domain.BillWithTotals(stored), nil
+	if err != nil {
+		if errors.Is(err, sqldb.ErrNoRows) {
+			return nil, errs.B().Code(errs.NotFound).Msg("bill not found").Err()
+		}
+		return nil, err
 	}
 
-	if errors.Is(dbErr, sqldb.ErrNoRows) {
-		return nil, temporalError(err)
-	}
-	return nil, dbErr
+	return domain.BillWithTotals(stored), nil
 }
 
 func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Time) (*domain.Bill, error) {
@@ -78,6 +69,7 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 		TaskQueue:             s.taskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}, workflows.BillWorkflow, input)
+
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +131,7 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 		Args:         []interface{}{struct{}{}},
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
+
 	if err != nil {
 		if bill, dbErr := s.billRepo.GetByID(ctx, billID); dbErr == nil && bill.Status == domain.BillStatusClosed {
 			return domain.BillWithTotals(bill), nil
@@ -150,20 +143,24 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	if err := update.Get(ctx, &bill); err != nil {
 		return nil, temporalError(err)
 	}
+	
 	return domain.BillWithTotals(&bill), nil
 }
 
 func (s *BillService) rejectIfClosed(ctx context.Context, id string) error {
 	bill, err := s.billRepo.GetByID(ctx, id)
+
 	if err != nil {
 		if errors.Is(err, sqldb.ErrNoRows) {
 			return nil
 		}
 		return err
 	}
+
 	if bill.Status == domain.BillStatusClosed {
 		return errs.B().Code(errs.FailedPrecondition).Msg("bill is closed").Err()
 	}
+
 	return nil
 }
 
@@ -172,9 +169,11 @@ func temporalError(err error) error {
 	if errors.As(err, &notFound) {
 		return errs.B().Code(errs.NotFound).Msg("bill not found").Err()
 	}
+
 	var appErr *temporal.ApplicationError
 	if errors.As(err, &appErr) {
 		return errs.B().Code(errs.FailedPrecondition).Msg(appErr.Message()).Err()
 	}
+
 	return err
 }

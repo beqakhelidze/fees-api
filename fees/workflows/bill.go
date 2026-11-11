@@ -28,12 +28,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return workflow.Await(ctx, func() bool { return billSaved })
 	}
 
-	if err := workflow.SetQueryHandler(ctx, QueryGetBill, func() (domain.Bill, error) {
-		return *domain.BillWithTotals(&state), nil
-	}); err != nil {
-		return state, err
-	}
-
 	if err := workflow.SetUpdateHandlerWithOptions(ctx, UpdateAddLineItem,
 		func(ctx workflow.Context, item domain.LineItem) (domain.Bill, error) {
 			item.Currency = domain.NormalizeCurrency(item.Currency)

@@ -70,6 +70,7 @@ func BillWithTotals(bill *Bill) *Bill {
 	if bill == nil {
 		return nil
 	}
+	
 	bill.Totals = TotalsFromLineItems(bill.LineItems)
 	return bill
 }
