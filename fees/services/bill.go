@@ -1,4 +1,4 @@
-package service
+package services
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"encore.app/fees/domain"
-	"encore.app/fees/repository"
-	"encore.app/fees/workflow"
+	"encore.app/fees/repositories"
+	"encore.app/fees/workflows"
 	"encore.dev/beta/errs"
 	"encore.dev/storage/sqldb"
 	"github.com/google/uuid"
@@ -16,7 +16,7 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-func NewBillService(temporal client.Client, taskQueue string, billRepo repository.BillRepository) *BillService {
+func NewBillService(temporal client.Client, taskQueue string, billRepo repositories.BillRepository) *BillService {
 	return &BillService{
 		temporal:  temporal,
 		taskQueue: taskQueue,
@@ -27,7 +27,7 @@ func NewBillService(temporal client.Client, taskQueue string, billRepo repositor
 type BillService struct {
 	temporal  client.Client
 	taskQueue string
-	billRepo  repository.BillRepository
+	billRepo  repositories.BillRepository
 }
 
 func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Time) (*domain.Bill, error) {
@@ -39,17 +39,17 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 	}
 
 	billID := uuid.NewString()
-	input := workflow.BillInput{
+	input := workflows.BillInput{
 		ID:          billID,
 		PeriodStart: periodStart.UTC(),
 		PeriodEnd:   periodEnd.UTC(),
 	}
 
 	_, err := s.temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:                    workflow.WorkflowID(billID),
+		ID:                    workflows.WorkflowID(billID),
 		TaskQueue:             s.taskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
-	}, workflow.BillWorkflow, input)
+	}, workflows.BillWorkflow, input)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +89,8 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	item.Currency = domain.NormalizeCurrency(item.Currency)
 
 	update, err := s.temporal.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
-		WorkflowID:   workflow.WorkflowID(billID),
-		UpdateName:   workflow.UpdateAddLineItem,
+		WorkflowID:   workflows.WorkflowID(billID),
+		UpdateName:   workflows.UpdateAddLineItem,
 		Args:         []interface{}{item},
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
@@ -118,8 +118,8 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	}
 
 	update, err := s.temporal.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
-		WorkflowID:   workflow.WorkflowID(billID),
-		UpdateName:   workflow.UpdateCloseBill,
+		WorkflowID:   workflows.WorkflowID(billID),
+		UpdateName:   workflows.UpdateCloseBill,
 		Args:         []interface{}{struct{}{}},
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
@@ -147,7 +147,7 @@ func (s *BillService) Get(ctx context.Context, billID string) (*domain.Bill, err
 	}
 
 	var bill domain.Bill
-	encoded, err := s.temporal.QueryWorkflow(ctx, workflow.WorkflowID(billID), "", workflow.QueryGetBill)
+	encoded, err := s.temporal.QueryWorkflow(ctx, workflows.WorkflowID(billID), "", workflows.QueryGetBill)
 	if err == nil {
 		if err := encoded.Get(&bill); err != nil {
 			return nil, err

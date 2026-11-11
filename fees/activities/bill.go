@@ -4,15 +4,15 @@ import (
 	"context"
 
 	"encore.app/fees/domain"
-	"encore.app/fees/repository"
+	"encore.app/fees/repositories"
 )
 
 // Activities are Temporal activities backed by the repository layer.
 type Activities struct {
-	billRepo repository.BillRepository
+	billRepo repositories.BillRepository
 }
 
-func New(billRepo repository.BillRepository) *Activities {
+func New(billRepo repositories.BillRepository) *Activities {
 	return &Activities{billRepo: billRepo}
 }
 

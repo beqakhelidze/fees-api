@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"encore.app/fees/activities"
-	"encore.app/fees/repository"
-	"encore.app/fees/service"
-	"encore.app/fees/workflow"
+	"encore.app/fees/repositories"
+	"encore.app/fees/services"
+	"encore.app/fees/workflows"
 	"encore.dev"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -24,7 +24,7 @@ var (
 type App struct {
 	client client.Client
 	worker worker.Worker
-	bills  *service.BillService
+	bills  *services.BillService
 }
 
 func initApp() (*App, error) {
@@ -35,12 +35,12 @@ func initApp() (*App, error) {
 		return nil, fmt.Errorf("create temporal client: %w", err)
 	}
 
-	billRepo := repository.NewBillRepository(db)
-	billService := service.NewBillService(c, feesTaskQueue, billRepo)
+	billRepo := repositories.NewBillRepository(db)
+	billService := services.NewBillService(c, feesTaskQueue, billRepo)
 	acts := activities.New(billRepo)
 
 	w := worker.New(c, feesTaskQueue, worker.Options{})
-	w.RegisterWorkflow(workflow.BillWorkflow)
+	w.RegisterWorkflow(workflows.BillWorkflow)
 	w.RegisterActivity(acts.PersistBill)
 
 	if err := w.Start(); err != nil {
