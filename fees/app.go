@@ -41,7 +41,7 @@ func initApp() (*App, error) {
 
 	w := worker.New(c, feesTaskQueue, worker.Options{})
 	w.RegisterWorkflow(workflows.BillWorkflow)
-	w.RegisterActivity(acts.PersistBill)
+	w.RegisterActivity(acts)
 
 	if err := w.Start(); err != nil {
 		c.Close()

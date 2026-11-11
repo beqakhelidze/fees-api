@@ -54,18 +54,13 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 		return nil, err
 	}
 
-	bill := domain.Bill{
+	return domain.BillWithTotals(&domain.Bill{
 		ID:          billID,
 		Status:      domain.BillStatusOpen,
 		PeriodStart: input.PeriodStart,
 		PeriodEnd:   input.PeriodEnd,
 		LineItems:   []domain.LineItem{},
-	}
-	if err := s.billRepo.Insert(ctx, bill); err != nil {
-		return nil, err
-	}
-
-	return domain.BillWithTotals(&bill), nil
+	}), nil
 }
 
 func (s *BillService) AddLineItem(ctx context.Context, billID string, item domain.LineItem) (*domain.Bill, error) {
@@ -101,10 +96,6 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if err := update.Get(ctx, &bill); err != nil {
 		return nil, err
 	}
-
-	if err := s.billRepo.InsertLineItem(ctx, billID, item); err != nil {
-		return nil, err
-	}
 	return domain.BillWithTotals(&bill), nil
 }
 
@@ -133,17 +124,6 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	if err := update.Get(ctx, &bill); err != nil {
 		return nil, err
 	}
-
-	closedAt := time.Now().UTC()
-
-	if bill.ClosedAt != nil {
-		closedAt = *bill.ClosedAt
-	}
-
-	if err := s.billRepo.Close(ctx, billID, closedAt); err != nil {
-		return nil, err
-	}
-
 	return domain.BillWithTotals(&bill), nil
 }
 

@@ -27,6 +27,7 @@ func (r *postgresBillRepository) Insert(ctx context.Context, bill domain.Bill) e
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO bills (id, status, period_start, period_end, closed_at, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		ON CONFLICT (id) DO NOTHING
 	`, bill.ID, string(bill.Status), bill.PeriodStart, bill.PeriodEnd, bill.ClosedAt)
 	return err
 }
