@@ -5,7 +5,8 @@ Go + Encore + Temporal fees API.
 ## Prerequisites
 
 - [Encore CLI](https://encore.dev/docs/install)
-- [Temporal CLI](https://docs.temporal.io/cli) (`brew install temporal` for )
+- [Temporal CLI](https://docs.temporal.io/cli) (`brew install temporal`)
+- [Docker](https://docs.docker.com/get-docker/) (running — Encore uses it for local Postgres)
 - Go 1.22+
 
 ## Run
