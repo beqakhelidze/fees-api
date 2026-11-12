@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"encore.app/fees/domain"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -21,11 +22,27 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
 	})
+	lineItemActCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 8,
+		},
+	})
 
 	billSaved := false
 
 	waitForBill := func(ctx workflow.Context) error {
 		return workflow.Await(ctx, func() bool { return billSaved })
+	}
+
+	removeLineItem := func(id string) {
+		kept := state.LineItems[:0]
+		for _, existing := range state.LineItems {
+			if existing.ID != id {
+				kept = append(kept, existing)
+			}
+		}
+		state.LineItems = kept
 	}
 
 	if err := workflow.SetUpdateHandlerWithOptions(ctx, UpdateAddLineItem,
@@ -34,11 +51,16 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			state.LineItems = append(state.LineItems, item)
 
 			if err := waitForBill(ctx); err != nil {
+				removeLineItem(item.ID)
 				return state, err
 			}
 
-			if err := workflow.ExecuteActivity(actCtx, "InsertLineItem", state.ID, item).Get(ctx, nil); err != nil {
-				return state, err
+			if err := workflow.ExecuteActivity(lineItemActCtx, "InsertLineItem", state.ID, item).Get(ctx, nil); err != nil {
+				removeLineItem(item.ID)
+				return state, temporal.NewApplicationError(
+					fmt.Sprintf("failed to persist line item %q after retries", item.ID),
+					"PersistLineItem",
+				)
 			}
 
 			return *domain.BillWithTotals(&state), nil

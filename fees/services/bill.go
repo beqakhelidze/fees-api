@@ -165,7 +165,11 @@ func temporalError(err error) error {
 
 	var appErr *temporal.ApplicationError
 	if errors.As(err, &appErr) {
-		return errs.B().Code(errs.FailedPrecondition).Msg(appErr.Message()).Err()
+		code := errs.FailedPrecondition
+		if appErr.Type() == "PersistLineItem" {
+			code = errs.Unavailable
+		}
+		return errs.B().Code(code).Msg(appErr.Message()).Err()
 	}
 
 	return err

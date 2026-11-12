@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 )
 
@@ -205,6 +207,65 @@ func TestBillWorkflow_RejectDuplicateLineItem(t *testing.T) {
 	var result domain.Bill
 	require.NoError(t, env.GetWorkflowResult(&result))
 	require.Len(t, result.LineItems, 1)
+}
+
+func TestBillWorkflow_AddLineItemPersistFailureRollsBack(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	registerBillActivities(env)
+
+	env.OnActivity("InsertBill", mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity("InsertLineItem", mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("db down"))
+	env.OnActivity("MarkBillClosed", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	now := time.Now().UTC()
+	input := BillInput{
+		ID:          "bill-persist-fail",
+		PeriodStart: now,
+		PeriodEnd:   now.Add(time.Hour),
+	}
+	item := domain.LineItem{
+		ID:          "li-fail",
+		Description: "ATM fee",
+		AmountMinor: 200,
+		Currency:    domain.CurrencyGEL,
+	}
+
+	var addErr error
+	env.RegisterDelayedCallback(func() {
+		env.UpdateWorkflow(UpdateAddLineItem, "add-fail", &testsuite.TestUpdateCallback{
+			OnReject: func(err error) {
+				require.Fail(t, "add should not be rejected", err)
+			},
+			OnAccept: func() {},
+			OnComplete: func(_ any, err error) {
+				addErr = err
+			},
+		}, item)
+	}, time.Millisecond)
+
+	// After InsertLineItem exhausts retries (default backoff), close the bill.
+	env.RegisterDelayedCallback(func() {
+		env.UpdateWorkflow(UpdateCloseBill, "close-1", &testsuite.TestUpdateCallback{
+			OnReject:   func(error) {},
+			OnAccept:   func() {},
+			OnComplete: func(any, error) {},
+		}, struct{}{})
+	}, time.Hour)
+
+	env.ExecuteWorkflow(BillWorkflow, input)
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	require.Error(t, addErr)
+	var appErr *temporal.ApplicationError
+	require.ErrorAs(t, addErr, &appErr)
+	require.Equal(t, "PersistLineItem", appErr.Type())
+	require.Contains(t, appErr.Message(), `failed to persist line item "li-fail"`)
+
+	var result domain.Bill
+	require.NoError(t, env.GetWorkflowResult(&result))
+	require.Empty(t, result.LineItems)
 }
 
 func TestBillWorkflow_AutoCloseWhenPeriodEnded(t *testing.T) {
