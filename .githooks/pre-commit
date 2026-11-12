@@ -4,13 +4,14 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
-echo "pre-commit: gofmt"
-unformatted="$(gofmt -l fees)"
-if [[ -n "$unformatted" ]]; then
-  echo "gofmt needed on:"
-  echo "$unformatted"
-  echo "run: gofmt -w fees"
-  exit 1
+echo "pre-commit: gofmt -w fees"
+gofmt -w fees
+
+# Re-stage any already-staged Go files that gofmt changed.
+staged_go="$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)"
+if [[ -n "$staged_go" ]]; then
+  # shellcheck disable=SC2086
+  echo "$staged_go" | tr '\n' '\0' | xargs -0 git add --
 fi
 
 echo "pre-commit: go test ./fees/domain/ ./fees/workflows/"

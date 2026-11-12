@@ -37,12 +37,14 @@ If the DB schema is stale: `encore db reset pave_db`
 go test ./fees/domain/ ./fees/workflows/
 ```
 
-Optional — run those checks before each commit:
+Optional — format + test before each commit:
 
 ```bash
 cp .githooks/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
+
+The hook runs `gofmt -w fees`, re-stages fixed Go files, then `go test`.
 
 ## API
 
