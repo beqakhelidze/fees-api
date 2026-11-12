@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+echo "pre-commit: gofmt"
+unformatted="$(gofmt -l fees)"
+if [[ -n "$unformatted" ]]; then
+  echo "gofmt needed on:"
+  echo "$unformatted"
+  echo "run: gofmt -w fees"
+  exit 1
+fi
+
+echo "pre-commit: go test ./fees/domain/ ./fees/workflows/"
+go test ./fees/domain/ ./fees/workflows/
+
+echo "pre-commit: ok"

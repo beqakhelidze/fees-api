@@ -31,6 +31,19 @@ Temporal UI: `http://localhost:8233`
 
 If the DB schema is stale: `encore db reset pave_db`
 
+## Test
+
+```bash
+go test ./fees/domain/ ./fees/workflows/
+```
+
+Optional — run those checks before each commit:
+
+```bash
+cp .githooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
 ## API
 
 | Method | Path |
