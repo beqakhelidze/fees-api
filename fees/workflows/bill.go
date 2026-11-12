@@ -73,8 +73,12 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
-	if err := workflow.SetUpdateHandlerWithOptions(ctx, UpdateCloseBill,
+	if err := workflow.SetUpdateHandler(ctx, UpdateCloseBill,
 		func(ctx workflow.Context, _ struct{}) (domain.Bill, error) {
+			if state.Status == domain.BillStatusClosed {
+				return *domain.BillWithTotals(&state), nil
+			}
+
 			now := workflow.Now(ctx).UTC()
 			state.Status = domain.BillStatusClosed
 			state.ClosedAt = &now
@@ -88,14 +92,6 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			}
 
 			return *domain.BillWithTotals(&state), nil
-		},
-		workflow.UpdateHandlerOptions{
-			Validator: func(ctx workflow.Context, _ struct{}) error {
-				if state.Status != domain.BillStatusOpen {
-					return fmt.Errorf("bill is already closed")
-				}
-				return nil
-			},
 		},
 	); err != nil {
 		return state, err
