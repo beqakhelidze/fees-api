@@ -209,6 +209,44 @@ func TestBillWorkflow_RejectDuplicateLineItem(t *testing.T) {
 	require.Len(t, result.LineItems, 1)
 }
 
+func TestBillWorkflow_CreatePersistFailure(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	registerBillActivities(env)
+
+	env.OnActivity("InsertBill", mock.Anything, mock.Anything).Return(fmt.Errorf("db down"))
+
+	now := time.Now().UTC()
+	input := BillInput{
+		ID:          "bill-create-fail",
+		PeriodStart: now,
+		PeriodEnd:   now.Add(time.Hour),
+	}
+
+	var readyErr error
+	env.RegisterDelayedCallback(func() {
+		env.UpdateWorkflow(UpdateWaitReady, "ready-1", &testsuite.TestUpdateCallback{
+			OnReject: func(err error) {
+				require.Fail(t, "wait ready should not be rejected", err)
+			},
+			OnAccept: func() {},
+			OnComplete: func(_ any, err error) {
+				readyErr = err
+			},
+		}, struct{}{})
+	}, 0)
+
+	env.ExecuteWorkflow(BillWorkflow, input)
+	require.True(t, env.IsWorkflowCompleted())
+	require.Error(t, env.GetWorkflowError())
+
+	require.Error(t, readyErr)
+	var appErr *temporal.ApplicationError
+	require.ErrorAs(t, readyErr, &appErr)
+	require.Equal(t, "PersistBill", appErr.Type())
+	require.Contains(t, appErr.Message(), "failed to create bill after retries")
+}
+
 func TestBillWorkflow_AddLineItemPersistFailureRollsBack(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()

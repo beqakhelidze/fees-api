@@ -22,17 +22,23 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
 	})
-	lineItemActCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	persistActCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 8,
+			MaximumAttempts: 7,
 		},
 	})
 
 	billSaved := false
+	var billPersistErr error
 
 	waitForBill := func(ctx workflow.Context) error {
-		return workflow.Await(ctx, func() bool { return billSaved })
+		if err := workflow.Await(ctx, func() bool {
+			return billSaved || billPersistErr != nil
+		}); err != nil {
+			return err
+		}
+		return billPersistErr
 	}
 
 	removeLineItem := func(id string) {
@@ -55,7 +61,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 				return state, err
 			}
 
-			if err := workflow.ExecuteActivity(lineItemActCtx, "InsertLineItem", state.ID, item).Get(ctx, nil); err != nil {
+			if err := workflow.ExecuteActivity(persistActCtx, "InsertLineItem", state.ID, item).Get(ctx, nil); err != nil {
 				removeLineItem(item.ID)
 				return state, temporal.NewApplicationError(
 					fmt.Sprintf("failed to persist line item %q after retries", item.ID),
@@ -130,8 +136,15 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
-	if err := workflow.ExecuteActivity(actCtx, "InsertBill", state).Get(ctx, nil); err != nil {
-		return state, err
+	if err := workflow.ExecuteActivity(persistActCtx, "InsertBill", state).Get(ctx, nil); err != nil {
+		billPersistErr = temporal.NewApplicationError(
+			"failed to create bill after retries",
+			"PersistBill",
+		)
+		if awaitErr := workflow.Await(ctx, func() bool { return workflow.AllHandlersFinished(ctx) }); awaitErr != nil {
+			return state, awaitErr
+		}
+		return state, billPersistErr
 	}
 
 	billSaved = true

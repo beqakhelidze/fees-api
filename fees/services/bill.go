@@ -166,7 +166,8 @@ func temporalError(err error) error {
 	var appErr *temporal.ApplicationError
 	if errors.As(err, &appErr) {
 		code := errs.FailedPrecondition
-		if appErr.Type() == "PersistLineItem" {
+		switch appErr.Type() {
+		case "PersistBill", "PersistLineItem":
 			code = errs.Unavailable
 		}
 		return errs.B().Code(code).Msg(appErr.Message()).Err()
