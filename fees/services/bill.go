@@ -67,23 +67,33 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 		PeriodEnd:   periodEnd.UTC(),
 	}
 
-	_, err := s.temporal.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:                    workflows.WorkflowID(billID),
-		TaskQueue:             s.taskQueue,
-		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
-	}, workflows.BillWorkflow, input)
+	startOp := s.temporal.NewWithStartWorkflowOperation(
+		client.StartWorkflowOptions{
+			ID:                       workflows.WorkflowID(billID),
+			TaskQueue:                s.taskQueue,
+			WorkflowIDConflictPolicy: enumspb.WORKFLOW_ID_CONFLICT_POLICY_FAIL,
+		},
+		workflows.BillWorkflow,
+		input,
+	)
 
+	update, err := s.temporal.UpdateWithStartWorkflow(ctx, client.UpdateWithStartWorkflowOptions{
+		StartWorkflowOperation: startOp,
+		UpdateOptions: client.UpdateWorkflowOptions{
+			UpdateName:   workflows.UpdateWaitReady,
+			Args:         []interface{}{struct{}{}},
+			WaitForStage: client.WorkflowUpdateStageCompleted,
+		},
+	})
 	if err != nil {
-		return nil, err
+		return nil, temporalError(err)
 	}
 
-	return domain.BillWithTotals(&domain.Bill{
-		ID:          input.ID,
-		Status:      domain.BillStatusOpen,
-		PeriodStart: input.PeriodStart,
-		PeriodEnd:   input.PeriodEnd,
-		LineItems:   []domain.LineItem{},
-	}), nil
+	var bill domain.Bill
+	if err := update.Get(ctx, &bill); err != nil {
+		return nil, temporalError(err)
+	}
+	return domain.BillWithTotals(&bill), nil
 }
 
 func (s *BillService) AddLineItem(ctx context.Context, billID string, item domain.LineItem) (*domain.Bill, error) {

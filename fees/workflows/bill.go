@@ -97,6 +97,17 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
+	if err := workflow.SetUpdateHandler(ctx, UpdateWaitReady,
+		func(ctx workflow.Context, _ struct{}) (domain.Bill, error) {
+			if err := waitForBill(ctx); err != nil {
+				return state, err
+			}
+			return *domain.BillWithTotals(&state), nil
+		},
+	); err != nil {
+		return state, err
+	}
+
 	if err := workflow.ExecuteActivity(actCtx, "InsertBill", state).Get(ctx, nil); err != nil {
 		return state, err
 	}

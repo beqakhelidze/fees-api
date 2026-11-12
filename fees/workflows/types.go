@@ -13,4 +13,5 @@ type BillInput struct {
 const (
 	UpdateAddLineItem = "AddLineItem"
 	UpdateCloseBill   = "CloseBill"
+	UpdateWaitReady   = "WaitReady"
 )
