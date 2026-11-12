@@ -56,6 +56,9 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 	if !periodEnd.After(periodStart) {
 		return nil, errs.B().Code(errs.InvalidArgument).Msg("period_end must be after period_start").Err()
 	}
+	if !periodEnd.UTC().After(time.Now().UTC()) {
+		return nil, errs.B().Code(errs.InvalidArgument).Msg("period_end must be in the future").Err()
+	}
 
 	billID := uuid.NewString()
 	input := workflows.BillInput{
