@@ -85,6 +85,7 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 			WaitForStage: client.WorkflowUpdateStageCompleted,
 		},
 	})
+
 	if err != nil {
 		return nil, temporalError(err)
 	}
@@ -93,6 +94,7 @@ func (s *BillService) Create(ctx context.Context, periodStart, periodEnd time.Ti
 	if err := update.Get(ctx, &bill); err != nil {
 		return nil, temporalError(err)
 	}
+
 	return domain.BillWithTotals(&bill), nil
 }
 
@@ -127,6 +129,7 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 	if err := update.Get(ctx, &bill); err != nil {
 		return nil, temporalError(err)
 	}
+
 	return domain.BillWithTotals(&bill), nil
 }
 
