@@ -102,7 +102,7 @@ func (s *BillService) AddLineItem(ctx context.Context, billID string, item domai
 		Args:         []interface{}{item},
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	})
-	
+
 	if err != nil {
 		if bill, dbErr := s.billRepo.GetByID(ctx, billID); dbErr == nil && bill.Status == domain.BillStatusClosed {
 			return nil, errs.B().Code(errs.FailedPrecondition).Msg("bill is closed").Err()
@@ -140,7 +140,7 @@ func (s *BillService) Close(ctx context.Context, billID string) (*domain.Bill, e
 	if err := update.Get(ctx, &bill); err != nil {
 		return nil, temporalError(err)
 	}
-	
+
 	return domain.BillWithTotals(&bill), nil
 }
 

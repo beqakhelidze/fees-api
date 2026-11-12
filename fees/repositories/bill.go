@@ -62,7 +62,7 @@ func (r *postgresBillRepository) GetByID(ctx context.Context, id string) (*domai
 		SELECT status, period_start, period_end, closed_at
 		FROM bills WHERE id = $1
 	`, id).Scan(&status, &periodStart, &periodEnd, &closedAt)
-	
+
 	if err != nil {
 		return nil, err
 	}

@@ -37,8 +37,8 @@ type Bill struct {
 	PeriodStart time.Time  `json:"period_start"`
 	PeriodEnd   time.Time  `json:"period_end"`
 	LineItems   []LineItem `json:"line_items"`
-	Totals   []Money    `json:"totals,omitempty"`
-	ClosedAt *time.Time `json:"closed_at,omitempty"`
+	Totals      []Money    `json:"totals,omitempty"`
+	ClosedAt    *time.Time `json:"closed_at,omitempty"`
 }
 
 func TotalsFromLineItems(items []LineItem) []Money {
@@ -57,7 +57,7 @@ func TotalsFromLineItems(items []LineItem) []Money {
 	for _, c := range order {
 		out = append(out, Money{AmountMinor: sums[c], Currency: c})
 	}
-	
+
 	return out
 }
 
@@ -65,12 +65,11 @@ func NormalizeCurrency(c Currency) Currency {
 	return Currency(strings.ToUpper(string(c)))
 }
 
-
 func BillWithTotals(bill *Bill) *Bill {
 	if bill == nil {
 		return nil
 	}
-	
+
 	bill.Totals = TotalsFromLineItems(bill.LineItems)
 	return bill
 }

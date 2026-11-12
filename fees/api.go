@@ -62,7 +62,7 @@ func (a *App) CloseBill(ctx context.Context, id string) (*BillResponse, error) {
 func (a *App) GetBill(ctx context.Context, id string) (*BillResponse, error) {
 	bill, err := a.billService.Get(ctx, id)
 	if err != nil {
-	
+
 		return nil, err
 	}
 	return &BillResponse{Bill: *bill}, nil

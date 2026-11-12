@@ -8,7 +8,6 @@ import (
 	"encore.app/fees/repositories"
 )
 
-
 func New(billRepo repositories.BillRepository) *Activities {
 	return &Activities{billRepo: billRepo}
 }

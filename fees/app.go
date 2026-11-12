@@ -22,16 +22,16 @@ var (
 
 //encore:service
 type App struct {
-	client client.Client
-	worker worker.Worker
-	billService  *services.BillService
+	client      client.Client
+	worker      worker.Worker
+	billService *services.BillService
 }
 
 func initApp() (*App, error) {
 	c, err := client.Dial(client.Options{
 		HostPort: cfg.TemporalServer,
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("create temporal client: %w", err)
 	}
@@ -50,9 +50,9 @@ func initApp() (*App, error) {
 	}
 
 	return &App{
-		client: c,
-		worker: w,
-		billService:  billService,
+		client:      c,
+		worker:      w,
+		billService: billService,
 	}, nil
 }
 
