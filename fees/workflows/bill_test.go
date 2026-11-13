@@ -87,7 +87,8 @@ func TestBillWorkflow_AddLineItemAndClose(t *testing.T) {
 	require.Equal(t, domain.BillStatusClosed, result.Status)
 	require.Len(t, result.LineItems, 1)
 	require.Equal(t, "li-1", result.LineItems[0].ID)
-	require.Equal(t, []domain.Money{{AmountMinor: 200, Currency: domain.CurrencyGEL}}, result.Totals)
+	require.Empty(t, result.Totals)
+	require.Equal(t, []domain.Money{{AmountMinor: 200, Currency: domain.CurrencyGEL}}, domain.TotalsFromLineItems(result.LineItems))
 	require.NotNil(t, result.ClosedAt)
 
 	require.Equal(t, domain.BillStatusOpen, addBill.Status)

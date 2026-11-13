@@ -69,7 +69,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 				)
 			}
 
-			return *domain.BillWithTotals(&state), nil
+			return state, nil
 		},
 		workflow.UpdateHandlerOptions{
 			Validator: func(ctx workflow.Context, item domain.LineItem) error {
@@ -104,7 +104,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 	if err := workflow.SetUpdateHandler(ctx, UpdateCloseBill,
 		func(ctx workflow.Context, _ struct{}) (domain.Bill, error) {
 			if state.Status == domain.BillStatusClosed {
-				return *domain.BillWithTotals(&state), nil
+				return state, nil
 			}
 
 			now := workflow.Now(ctx).UTC()
@@ -119,7 +119,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 				return state, err
 			}
 
-			return *domain.BillWithTotals(&state), nil
+			return state, nil
 		},
 	); err != nil {
 		return state, err
@@ -130,7 +130,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 			if err := waitForBill(ctx); err != nil {
 				return state, err
 			}
-			return *domain.BillWithTotals(&state), nil
+			return state, nil
 		},
 	); err != nil {
 		return state, err
@@ -173,7 +173,7 @@ func BillWorkflow(ctx workflow.Context, input BillInput) (domain.Bill, error) {
 		return state, err
 	}
 
-	return *domain.BillWithTotals(&state), nil
+	return state, nil
 }
 
 // WorkflowID returns the Temporal workflow id for a bill.
